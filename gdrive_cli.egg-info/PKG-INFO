@@ -1,0 +1,118 @@
+Metadata-Version: 2.4
+Name: gdrive-cli
+Version: 0.1.0
+Summary: Công cụ thao tác quản lý Google Drive trên Linux qua Terminal
+Author: Kaz
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: google-api-python-client>=2.100.0
+Requires-Dist: google-auth-httplib2>=0.2.0
+Requires-Dist: google-auth-oauthlib>=1.2.0
+Requires-Dist: click>=8.1.0
+Requires-Dist: rich>=13.0.0
+
+# 🚀 gdrive-cli: Quản Lý Google Drive Trên Terminal Linux
+
+Công cụ dòng lệnh (CLI tool) viết bằng Python giúp thao tác, quản lý và xử lý file Google Drive trực tiếp từ Terminal trên Linux với giao diện trực quan, bảng màu đẹp mắt và thanh tiến trình (progress bar).
+
+---
+
+## 📌 Các Tính Năng Chính
+
+- **Liệt kê file & thư mục (`ls`)**: Hiển thị bảng màu Rich với Tên, Loại file, Kích thước (B/KB/MB/GB), Ngày sửa đổi và ID.
+- **Tải lên (`upload`)**: Tải file đơn lẻ hoặc tải đệ quy toàn bộ thư mục lên Drive (có thanh tiến trình và resumable upload).
+- **Tải xuống (`download`)**: Tải file về máy. Tự động xuất Google Docs -> PDF/DOCX, Google Sheets -> XLSX, Google Slides -> PPTX.
+- **Tìm kiếm (`search`)**: Tìm kiếm nhanh theo từ khóa trong tên file/thư mục.
+- **Tạo thư mục (`mkdir`)**: Tạo thư mục mới trên Drive.
+- **Xóa file (`rm`)**: Chuyển file vào thùng rác hoặc xóa vĩnh viễn (`--permanent`).
+- **Chia sẻ file (`share`)**: Bật chế độ chia sẻ công khai qua liên kết (quyền xem, bình luận hoặc chỉnh sửa).
+- **Xem thông tin (`info`)**: Xem toàn bộ metadata chi tiết, chủ sở hữu, dung lượng, đường dẫn web.
+- **Đọc nhanh (`cat`)**: In trực tiếp nội dung file văn bản từ Drive ra terminal.
+- **Kiểm tra dung lượng (`auth status`)**: Hiển thị thanh trạng thái bộ nhớ đã dùng / còn trống và thông tin tài khoản.
+
+---
+
+## 🛠️ Cài Đặt
+
+Công cụ đã được cài đặt sẵn vào máy của bạn tại `/home/kaz/.gemini/antigravity/scratch/gdrive-cli` và liên kết với lệnh toàn cục `/home/kaz/.local/bin/gdrive`.
+
+Nếu cần cài đặt lại hoặc cập nhật:
+```bash
+cd /home/kaz/.gemini/antigravity/scratch/gdrive-cli
+./install.sh
+```
+
+---
+
+## 🔑 Hướng Dẫn Xác Thực (3 Phút)
+
+Google Drive API yêu cầu xác thực bảo mật OAuth 2.0. Bạn chỉ cần thực hiện 1 lần duy nhất:
+
+### Bước 1: Lấy `credentials.json` từ Google Cloud Console
+1. Truy cập [Google Cloud Console](https://console.cloud.google.com/) và đăng nhập tài khoản Google của bạn.
+2. Tạo một dự án mới (ví dụ: `My-GDrive-CLI`) hoặc chọn dự án có sẵn.
+3. Vào **APIs & Services** > **Library** > Tìm **Google Drive API** và nhấn **Enable** (Bật).
+4. Vào **APIs & Services** > **OAuth consent screen**:
+   - User Type: Chọn **External** (Ngoài tổ chức) > Nhấn **Create**.
+   - Điền **App name** (ví dụ: `gdrive-cli`), **User support email** và **Developer email**.
+   - Nhấn **Save and Continue** qua các bước.
+   - Tại mục **Test users**, nhấn **Add Users** và thêm địa chỉ Gmail của bạn vào danh sách.
+5. Vào **APIs & Services** > **Credentials**:
+   - Nhấn **Create Credentials** > **OAuth client ID**.
+   - Application type: Chọn **Desktop app**.
+   - Name: `gdrive-cli`.
+   - Nhấn **Create**.
+   - Nhấn biểu tượng ⬇️ **Download JSON** để tải file cấu hình về máy (lưu tại `~/Downloads/credentials.json`).
+
+### Bước 2: Chạy xác thực trên terminal
+Chạy lệnh sau:
+```bash
+gdrive auth setup -c ~/Downloads/credentials.json
+```
+Trình duyệt sẽ mở ra trang đăng nhập Google. Bạn chọn tài khoản và bấm **Continue** (Tiếp tục) để cấp quyền. Sau khi hoàn tất, token sẽ được lưu tại `~/.config/gdrive-cli/token.json` và tự động làm mới khi hết hạn.
+
+---
+
+## 📖 Bảng Tra Cứu Lệnh Thường Dùng
+
+| Thao tác | Cú pháp lệnh | Mô tả |
+| :--- | :--- | :--- |
+| **Kiểm tra tài khoản** | `gdrive auth status` | Xem thông tin tài khoản và dung lượng lưu trữ |
+| **Xem danh sách** | `gdrive ls` | Liệt kê file/thư mục ở thư mục gốc |
+| **Xem trong thư mục** | `gdrive ls <FOLDER_ID>` | Liệt kê nội dung bên trong một thư mục |
+| **Tìm kiếm file** | `gdrive search "báo cáo"` | Tìm file có chứa từ khóa trong tên |
+| **Tải lên 1 file** | `gdrive upload tailieu.pdf` | Tải file lên thư mục gốc |
+| **Tải lên vào folder** | `gdrive upload tailieu.pdf -p <FOLDER_ID>` | Tải file vào thư mục chỉ định |
+| **Tải lên cả thư mục** | `gdrive upload ./my_folder/` | Tải đệ quy toàn bộ thư mục lên Drive |
+| **Tải file về máy** | `gdrive download <FILE_ID>` | Tải file về thư mục hiện tại |
+| **Tải lưu vị trí khác** | `gdrive download <FILE_ID> -o ~/Downloads/` | Tải file về thư mục Downloads |
+| **Tải xuất dạng PDF** | `gdrive download <FILE_ID> --pdf` | Tự động xuất Doc/Sheet thành PDF |
+| **Tạo thư mục** | `gdrive mkdir "DuAn2026"` | Tạo thư mục mới trên Drive |
+| **Xem thông tin chi tiết**| `gdrive info <FILE_ID>` | Xem link web, quyền, kích thước, ngày sửa |
+| **Lấy link chia sẻ** | `gdrive share <FILE_ID>` | Bật quyền xem cho bất kỳ ai có link |
+| **Đọc nhanh file text** | `gdrive cat <FILE_ID>` | In nội dung file text ra terminal |
+| **Xóa file (thùng rác)** | `gdrive rm <FILE_ID>` | Chuyển file vào thùng rác |
+| **Xóa vĩnh viễn** | `gdrive rm <FILE_ID> --permanent` | Xóa hoàn toàn khỏi Drive |
+| **Đăng xuất** | `gdrive auth logout` | Xóa token đã lưu |
+
+---
+
+## 💡 Tùy Chọn: Mount Google Drive Thành Ổ Đĩa Cục Bộ Với Rclone
+
+Nếu bạn muốn Google Drive xuất hiện như một ổ cứng trên Linux (để thao tác bằng lệnh `cd`, `cp`, `rsync` hoặc mở bằng File Manager):
+
+1. Cài đặt Rclone trên CachyOS / Arch:
+   ```bash
+   sudo pacman -S rclone
+   ```
+2. Cấu hình kết nối:
+   ```bash
+   rclone config
+   # Chọn 'n' (New remote) -> Đặt tên 'gdrive' -> Chọn Storage type là 'drive' (Google Drive)
+   ```
+3. Tạo thư mục mount và gắn ổ:
+   ```bash
+   mkdir -p ~/GoogleDrive
+   rclone mount gdrive: ~/GoogleDrive --vfs-cache-mode writes &
+   ```
+   Bây giờ toàn bộ Google Drive của bạn đã sẵn sàng tại `~/GoogleDrive`!
