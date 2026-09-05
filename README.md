@@ -19,44 +19,7 @@ Công cụ dòng lệnh (CLI tool) viết bằng Python giúp thao tác, quản 
 
 ---
 
-## 🛠️ Cài Đặt
 
-Công cụ đã được cài đặt sẵn vào máy của bạn tại `/home/kaz/.gemini/antigravity/scratch/gdrive-cli` và liên kết với lệnh toàn cục `/home/kaz/.local/bin/gdrive`.
-
-Nếu cần cài đặt lại hoặc cập nhật:
-```bash
-cd /home/kaz/.gemini/antigravity/scratch/gdrive-cli
-./install.sh
-```
-
----
-
-## 🔑 Hướng Dẫn Xác Thực (3 Phút)
-
-Google Drive API yêu cầu xác thực bảo mật OAuth 2.0. Bạn chỉ cần thực hiện 1 lần duy nhất:
-
-### Bước 1: Lấy `credentials.json` từ Google Cloud Console
-1. Truy cập [Google Cloud Console](https://console.cloud.google.com/) và đăng nhập tài khoản Google của bạn.
-2. Tạo một dự án mới (ví dụ: `My-GDrive-CLI`) hoặc chọn dự án có sẵn.
-3. Vào **APIs & Services** > **Library** > Tìm **Google Drive API** và nhấn **Enable** (Bật).
-4. Vào **APIs & Services** > **OAuth consent screen**:
-   - User Type: Chọn **External** (Ngoài tổ chức) > Nhấn **Create**.
-   - Điền **App name** (ví dụ: `gdrive-cli`), **User support email** và **Developer email**.
-   - Nhấn **Save and Continue** qua các bước.
-   - Tại mục **Test users**, nhấn **Add Users** và thêm địa chỉ Gmail của bạn vào danh sách.
-5. Vào **APIs & Services** > **Credentials**:
-   - Nhấn **Create Credentials** > **OAuth client ID**.
-   - Application type: Chọn **Desktop app**.
-   - Name: `gdrive-cli`.
-   - Nhấn **Create**.
-   - Nhấn biểu tượng ⬇️ **Download JSON** để tải file cấu hình về máy (lưu tại `~/Downloads/credentials.json`).
-
-### Bước 2: Chạy xác thực trên terminal
-Chạy lệnh sau:
-```bash
-gdrive auth setup -c ~/Downloads/credentials.json
-```
-Trình duyệt sẽ mở ra trang đăng nhập Google. Bạn chọn tài khoản và bấm **Continue** (Tiếp tục) để cấp quyền. Sau khi hoàn tất, token sẽ được lưu tại `~/.config/gdrive-cli/token.json` và tự động làm mới khi hết hạn.
 
 ---
 
@@ -93,18 +56,13 @@ Trình duyệt sẽ mở ra trang đăng nhập Google. Bạn chọn tài khoả
 
 Nếu bạn muốn Google Drive xuất hiện như một ổ cứng trên Linux (để thao tác bằng lệnh `cd`, `cp`, `rsync` hoặc mở bằng File Manager):
 
-1. Cài đặt Rclone trên CachyOS / Arch:
-   ```bash
-   sudo pacman -S rclone
-   ```
+1. Cài đặt Rclone 
 2. Cấu hình kết nối:
    ```bash
    rclone config
-   # Chọn 'n' (New remote) -> Đặt tên 'gdrive' -> Chọn Storage type là 'drive' (Google Drive)
    ```
 3. Tạo thư mục mount và gắn ổ:
    ```bash
    mkdir -p ~/GoogleDrive
    rclone mount gdrive: ~/GoogleDrive --vfs-cache-mode writes &
    ```
-   Bây giờ toàn bộ Google Drive của bạn đã sẵn sàng tại `~/GoogleDrive`!
