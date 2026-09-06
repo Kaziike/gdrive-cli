@@ -79,20 +79,25 @@ Trình duyệt sẽ mở ra trang đăng nhập Google. Bạn chọn tài khoả
 | :--- | :--- | :--- |
 | **Kiểm tra tài khoản** | `gdrive auth status` | Xem thông tin tài khoản và dung lượng lưu trữ |
 | **Xem danh sách** | `gdrive ls` | Liệt kê file/thư mục ở thư mục gốc |
-| **Xem trong thư mục** | `gdrive ls <FOLDER_ID>` | Liệt kê nội dung bên trong một thư mục |
+| **Xem trong thư mục** | `gdrive ls <TÊN_FOLDER_HOẶC_ID>` | Liệt kê nội dung bên trong thư mục (VD: `gdrive ls Nhạc`) |
 | **Tìm kiếm file** | `gdrive search "báo cáo"` | Tìm file có chứa từ khóa trong tên |
 | **Tải lên 1 file** | `gdrive upload tailieu.pdf` | Tải file lên thư mục gốc |
-| **Tải lên vào folder** | `gdrive upload tailieu.pdf -p <FOLDER_ID>` | Tải file vào thư mục chỉ định |
+| **Tải lên vào folder** | `gdrive upload tailieu.pdf -p <TÊN_FOLDER_HOẶC_ID>` | Tải file vào thư mục chỉ định (VD: `-p Nhạc`) |
 | **Tải lên cả thư mục** | `gdrive upload ./my_folder/` | Tải đệ quy toàn bộ thư mục lên Drive |
-| **Tải file về máy** | `gdrive download <FILE_ID>` | Tải file về thư mục hiện tại |
-| **Tải lưu vị trí khác** | `gdrive download <FILE_ID> -o ~/Downloads/` | Tải file về thư mục Downloads |
-| **Tải xuất dạng PDF** | `gdrive download <FILE_ID> --pdf` | Tự động xuất Doc/Sheet thành PDF |
+| **Tải file về máy** | `gdrive download <TÊN_FILE_HOẶC_ID>` | Tải file về máy (tự lưu vào thư mục mặc định) |
+| **Tải cả thư mục về** | `gdrive download <TÊN_FOLDER_HOẶC_ID>` | Tải đệ quy toàn bộ thư mục về máy |
+| **Tải lưu vị trí khác** | `gdrive download <TÊN_FILE_HOẶC_ID> -o ~/Downloads/` | Tải file về thư mục Downloads |
+| **Tải xuất dạng PDF** | `gdrive download <TÊN_FILE_HOẶC_ID> --pdf` | Tự động xuất Doc/Sheet thành PDF |
+| **Xem thư mục tải mặc định** | `gdrive config download-dir` | Kiểm tra thư mục lưu file tải về hiện tại |
+| **Đặt thư mục tải mặc định** | `gdrive config download-dir ~/Downloads` | Tùy chỉnh thư mục tải về mặc định (VD: `~/Downloads`) |
+| **Reset thư mục tải về** | `gdrive config reset-download-dir` | Đặt lại về mặc định (lưu tại thư mục đang đứng CWD) |
+| **Xem toàn bộ cấu hình** | `gdrive config show` | Xem file config, thư mục tải về, trạng thái auth |
 | **Tạo thư mục** | `gdrive mkdir "DuAn2026"` | Tạo thư mục mới trên Drive |
-| **Xem thông tin chi tiết**| `gdrive info <FILE_ID>` | Xem link web, quyền, kích thước, ngày sửa |
-| **Lấy link chia sẻ** | `gdrive share <FILE_ID>` | Bật quyền xem cho bất kỳ ai có link |
-| **Đọc nhanh file text** | `gdrive cat <FILE_ID>` | In nội dung file text ra terminal |
-| **Xóa file (thùng rác)** | `gdrive rm <FILE_ID>` | Chuyển file vào thùng rác |
-| **Xóa vĩnh viễn** | `gdrive rm <FILE_ID> --permanent` | Xóa hoàn toàn khỏi Drive |
+| **Xem thông tin chi tiết**| `gdrive info <TÊN_FILE_HOẶC_ID>` | Xem link web, quyền, kích thước, ngày sửa |
+| **Lấy link chia sẻ** | `gdrive share <TÊN_FILE_HOẶC_ID>` | Bật quyền xem cho bất kỳ ai có link |
+| **Đọc nhanh file text** | `gdrive cat <TÊN_FILE_HOẶC_ID>` | In nội dung file text ra terminal (VD: `gdrive cat Index.html`) |
+| **Xóa file (thùng rác)** | `gdrive rm <TÊN_FILE_HOẶC_ID>` | Chuyển file vào thùng rác |
+| **Xóa vĩnh viễn** | `gdrive rm <TÊN_FILE_HOẶC_ID> --permanent` | Xóa hoàn toàn khỏi Drive |
 | **Đăng xuất** | `gdrive auth logout` | Xóa token đã lưu |
 
 ---
