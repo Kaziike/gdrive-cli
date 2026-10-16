@@ -26,10 +26,7 @@ echo "==> Tạo lệnh gdrive tại $LAUNCHER..."
 cat << 'EOF' > "$LAUNCHER"
 #!/usr/bin/env bash
 # Wrapper launcher for gdrive-cli
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.gemini/antigravity/scratch/gdrive-cli" 2>/dev/null && pwd)"
-if [ ! -d "$PROJECT_DIR" ]; then
-    PROJECT_DIR="/home/kaz/ProjectLinux/gdrive-cli"
-fi
+PROJECT_DIR="/home/kaz/ProjectLinux/gdrive-cli"
 exec "$PROJECT_DIR/venv/bin/python3" -m gdrive_cli.cli "$@"
 EOF
 

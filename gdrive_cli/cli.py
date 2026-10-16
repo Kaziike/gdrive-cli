@@ -4,7 +4,7 @@ from pathlib import Path
 import click
 from googleapiclient.errors import HttpError
 
-from gdrive_cli import auth, ui, config
+from gdrive_cli import auth, ui, config, backup
 from gdrive_cli.client import DriveClient
 from rich.panel import Panel
 
@@ -14,6 +14,82 @@ from rich.panel import Panel
 def main():
     """🚀 gdrive-cli: Công cụ quản lý Google Drive trên terminal Linux"""
     pass
+
+
+# ==========================================
+# BACKUP COMMANDS
+# ==========================================
+@main.group(name="backup")
+def backup_group():
+    """Sao lưu và phục hồi cấu hình (config, appdata, dotfiles) lên Google Drive"""
+    pass
+
+
+@backup_group.command(name="run")
+@click.argument("targets", nargs=-1)
+@click.option("--name", "-n", default=None, help="Tên tùy chỉnh cho bản sao lưu (mặc định theo ngày giờ)")
+@click.option("--exclude", "-e", multiple=True, help="Mẫu file hoặc thư mục loại trừ thêm (VD: --exclude '*.iso')")
+@click.option("--dry-run", is_flag=True, default=False, help="Chạy thử nghiệm không upload để kiểm tra danh sách file")
+@click.option("--install-missing", is_flag=True, default=False, help="Tự động cài đặt ứng dụng còn thiếu nếu phát hiện")
+def backup_run_cmd(targets, name, exclude, dry_run, install_missing):
+    """Sao lưu cấu hình (VD: gdrive backup run config appdata hoặc gdrive backup run nvim)"""
+    try:
+        backup.run_backup(
+            targets=list(targets),
+            name=name,
+            custom_excludes=list(exclude),
+            dry_run=dry_run,
+            install_missing=install_missing,
+        )
+    except Exception as e:
+        ui.print_error(f"Quá trình sao lưu thất bại: {e}")
+
+
+@backup_group.command(name="list")
+def backup_list_cmd():
+    """Liệt kê các bản sao lưu đã tạo trên Google Drive"""
+    try:
+        backup.list_backups()
+    except Exception as e:
+        ui.print_error(f"Không thể liệt kê bản sao lưu: {e}")
+
+
+@backup_group.command(name="restore")
+@click.argument("target")
+@click.option("--dest", "-d", default=None, help="Thư mục đích để khôi phục (mặc định: ~)")
+@click.option("-f", "--force", is_flag=True, default=False, help="Ghi đè file cấu hình nếu đã tồn tại mà không cần hỏi xác nhận")
+@click.option("--install-apps", is_flag=True, default=False, help="Tự động kiểm tra và cài đặt ứng dụng còn thiếu")
+def backup_restore_cmd(target, dest, force, install_apps):
+    """Khôi phục bản sao lưu từ Google Drive về máy (theo Tên hoặc ID)"""
+    try:
+        backup.restore_backup(
+            backup_target=target,
+            dest=dest,
+            force=force,
+            install_apps=install_apps,
+        )
+    except Exception as e:
+        ui.print_error(f"Khôi phục thất bại: {e}")
+
+
+@backup_group.command(name="rm")
+@click.argument("target")
+@click.option("--permanent", is_flag=True, default=False, help="Xóa vĩnh viễn thay vì chuyển vào thùng rác")
+@click.option("-y", "--yes", is_flag=True, default=False, help="Bỏ qua xác nhận xóa")
+def backup_delete_cmd(target, permanent, yes):
+    """Xóa một bản sao lưu trên Google Drive (theo Tên hoặc ID)"""
+    try:
+        client = DriveClient()
+        folder_id = client.resolve_id(target, is_folder=True)
+        meta = client.get_file_metadata(folder_id, fields="name")
+        folder_name = meta.get("name", folder_id)
+
+        action = "xóa vĩnh viễn" if permanent else "chuyển vào thùng rác"
+        if yes or click.confirm(f"Bạn có chắc muốn {action} bản sao lưu '{folder_name}' (ID: {folder_id})?"):
+            client.delete_file(folder_id, permanent=permanent)
+            ui.print_success(f"Đã {action} bản sao lưu: '{folder_name}'")
+    except Exception as e:
+        ui.print_error(f"Xóa bản sao lưu thất bại: {e}")
 
 
 # ==========================================
@@ -243,7 +319,8 @@ def create_directory(name, parent):
 @main.command(name="upload")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--parent", "-p", default=None, help="Tên hoặc ID của thư mục đích trên Drive")
-def upload(path, parent):
+@click.option("--workers", "-w", default=4, type=click.IntRange(1, 16), show_default=True, help="Số luồng tải lên song song khi tải thư mục")
+def upload(path, parent, workers):
     """Tải lên file hoặc toàn bộ thư mục lên Google Drive"""
     src = Path(path).expanduser().resolve()
     client = DriveClient()
@@ -272,12 +349,17 @@ def upload(path, parent):
             ui.print_error(f"Tải lên thất bại: {e}")
 
     elif src.is_dir():
-        ui.print_info(f"Bắt đầu tải lên thư mục: [bold]{src.name}[/bold]")
+        ui.print_info(f"Bắt đầu tải lên thư mục: [bold]{src.name}[/bold] (tối đa [cyan]{workers}[/cyan] luồng song song)")
         try:
             def on_item(p):
                 ui.console.print(f"  ⬆ Đang tải: [dim]{p.relative_to(src)}[/dim]")
 
-            root_meta = client.upload_directory(str(src), parent_id=parent_id, on_item_upload=on_item)
+            root_meta = client.upload_directory(
+                str(src),
+                parent_id=parent_id,
+                on_item_upload=on_item,
+                workers=workers,
+            )
             ui.print_success(f"Tải lên hoàn tất toàn bộ thư mục [bold]{src.name}[/bold]!")
             ui.console.print(f"ID thư mục trên Drive: [yellow]{root_meta.get('id')}[/yellow]")
         except Exception as e:
@@ -288,7 +370,8 @@ def upload(path, parent):
 @click.argument("target")
 @click.option("--output", "-o", default=None, help="Đường dẫn file hoặc thư mục lưu file tải về")
 @click.option("--pdf", is_flag=True, default=False, help="Buộc xuất Google Docs/Sheets/Slides ra định dạng PDF")
-def download(target, output, pdf):
+@click.option("--workers", "-w", default=4, type=click.IntRange(1, 16), show_default=True, help="Số luồng tải xuống song song khi tải thư mục")
+def download(target, output, pdf, workers):
     """Tải file hoặc toàn bộ thư mục từ Google Drive về máy (theo Tên hoặc ID)"""
     client = DriveClient()
     try:
@@ -309,7 +392,7 @@ def download(target, output, pdf):
 
     if is_folder:
         folder_name = meta.get("name", file_id)
-        ui.print_info(f"Bắt đầu tải về thư mục: [bold]{folder_name}[/bold]")
+        ui.print_info(f"Bắt đầu tải về thư mục: [bold]{folder_name}[/bold] (tối đa [cyan]{workers}[/cyan] luồng song song)")
         try:
             def on_file(name):
                 ui.console.print(f"  ⬇ Đang tải: [dim]{name}[/dim]")
@@ -318,6 +401,7 @@ def download(target, output, pdf):
                 file_id,
                 output_dir_or_path=dest_output,
                 on_item_download=on_file,
+                workers=workers,
             )
             ui.print_success(f"Tải thư mục hoàn tất về: [bold]{dest}[/bold]")
         except Exception as e:

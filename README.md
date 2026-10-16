@@ -9,6 +9,12 @@ Công cụ dòng lệnh (CLI tool) viết bằng Python giúp thao tác, quản 
 - **Liệt kê file & thư mục (`ls`)**: Hiển thị bảng màu Rich với Tên, Loại file, Kích thước (B/KB/MB/GB), Ngày sửa đổi và ID.
 - **Tải lên (`upload`)**: Tải file đơn lẻ hoặc tải đệ quy toàn bộ thư mục lên Drive (có thanh tiến trình và resumable upload).
 - **Tải xuống (`download`)**: Tải file về máy. Tự động xuất Google Docs -> PDF/DOCX, Google Sheets -> XLSX, Google Slides -> PPTX.
+- **Sao lưu & Khôi phục hệ thống (`backup`)**:
+  - Sao lưu `~/.config`, `~/.local/share`, và các dotfiles lên Drive **giữ nguyên 100% cấu trúc thư mục**.
+  - Tự động lọc bỏ cache/junk (`GPUCache`, cache trình duyệt, node_modules, log, socket,...).
+  - Tự động kiểm tra ứng dụng tương ứng đã được cài trên máy chưa, và hỗ trợ **tự động cài đặt** qua `pacman`, `yay`, hoặc `flatpak`.
+  - Tự động lưu manifest danh sách package hệ thống (`pacman -Qqe`, `yay -Qqm`, `flatpak list`).
+  - Khôi phục nhanh chóng snapshot về đúng thư mục gốc hoặc thư mục chỉ định (`--dest`).
 - **Tìm kiếm (`search`)**: Tìm kiếm nhanh theo từ khóa trong tên file/thư mục.
 - **Tạo thư mục (`mkdir`)**: Tạo thư mục mới trên Drive.
 - **Xóa file (`rm`)**: Chuyển file vào thùng rác hoặc xóa vĩnh viễn (`--permanent`).
@@ -33,9 +39,9 @@ Công cụ dòng lệnh (CLI tool) viết bằng Python giúp thao tác, quản 
 | **Tìm kiếm file** | `gdrive search "báo cáo"` | Tìm file có chứa từ khóa trong tên |
 | **Tải lên 1 file** | `gdrive upload tailieu.pdf` | Tải file lên thư mục gốc |
 | **Tải lên vào folder** | `gdrive upload tailieu.pdf -p <TÊN_FOLDER_HOẶC_ID>` | Tải file vào thư mục chỉ định (VD: `-p Nhạc`) |
-| **Tải lên cả thư mục** | `gdrive upload ./my_folder/` | Tải đệ quy toàn bộ thư mục lên Drive |
+| **Tải lên cả thư mục** | `gdrive upload ./my_folder/ [-w 4]` | Tải lên đệ quy đa luồng song song lên Drive (mặc định 4 luồng) |
 | **Tải file về máy** | `gdrive download <TÊN_FILE_HOẶC_ID>` | Tải file về máy (tự lưu vào thư mục mặc định) |
-| **Tải cả thư mục về** | `gdrive download <TÊN_FOLDER_HOẶC_ID>` | Tải đệ quy toàn bộ thư mục về máy |
+| **Tải cả thư mục về** | `gdrive download <TÊN_FOLDER_HOẶC_ID> [-w 4]` | Tải về đệ quy đa luồng song song về máy (mặc định 4 luồng) |
 | **Tải lưu vị trí khác** | `gdrive download <TÊN_FILE_HOẶC_ID> -o ~/Downloads/` | Tải file về thư mục Downloads |
 | **Tải xuất dạng PDF** | `gdrive download <TÊN_FILE_HOẶC_ID> --pdf` | Tự động xuất Doc/Sheet thành PDF |
 | **Xem thư mục tải mặc định** | `gdrive config download-dir` | Kiểm tra thư mục lưu file tải về hiện tại |
@@ -49,6 +55,68 @@ Công cụ dòng lệnh (CLI tool) viết bằng Python giúp thao tác, quản 
 | **Xóa file (thùng rác)** | `gdrive rm <TÊN_FILE_HOẶC_ID>` | Chuyển file vào thùng rác |
 | **Xóa vĩnh viễn** | `gdrive rm <TÊN_FILE_HOẶC_ID> --permanent` | Xóa hoàn toàn khỏi Drive |
 | **Đăng xuất** | `gdrive auth logout` | Xóa token đã lưu |
+| **Sao lưu cấu hình** | `gdrive backup run [MỤC...]` | Nén .tar.gz và sao lưu config/appdata/dotfiles lên Drive |
+| **Kiểm tra trước sao lưu** | `gdrive backup run --dry-run` | Giả lập xem các file sẽ được nén mà chưa tải lên |
+| **Sao lưu & tự cài app** | `gdrive backup run --install-missing` | Tự động kiểm tra & cài đặt app thiếu khi backup |
+| **Xem danh sách sao lưu** | `gdrive backup list` | Xem các bản snapshot trên Drive |
+| **Khôi phục sao lưu** | `gdrive backup restore <TÊN_HOẶC_ID>` | Tải về và tự động giải nén ra đúng vị trí |
+| **Khôi phục ghi đè nhanh**| `gdrive backup restore <TÊN_HOẶC_ID> -f` | Tự động ghi đè file hiện có không cần hỏi xác nhận |
+| **Khôi phục & tự cài app**| `gdrive backup restore <TÊN_HOẶC_ID> --install-apps` | Tự động cài lại các ứng dụng tương ứng khi restore |
+| **Xóa bản sao lưu** | `gdrive backup rm <TÊN_HOẶC_ID> [-y]` | Xóa bản sao lưu trên Drive |
+
+---
+
+## 🛡️ Hướng Dẫn Chi Tiết Tính Năng Backup & Restore (Nén Siêu Tốc)
+
+### 1. Cơ chế đóng gói nén `.tar.gz`
+- Trước khi gửi dữ liệu lên Google Drive, toàn bộ các file cấu hình được gom và **nén thành một gói `.tar.gz` duy nhất cục bộ**:
+  - Tiết kiệm 60% - 85% dung lượng lưu trữ và băng thông mạng.
+  - Tốc độ upload tăng gấp hàng chục lần (chỉ 1 luồng upload duy nhất thay vì hàng ngàn lượt gọi API riêng lẻ).
+  - Bảo toàn 100% quyền truy cập Unix (`permissions/chmod`), liên kết mềm (`symlink`), timestamps và các file ẩn (`dotfiles`).
+- Cấu trúc lưu trữ trên Google Drive:
+  `Linux_Backups/<tên_máy_hostname>/<tên_bản_sao_lưu>/`
+  - `<tên_bản_sao_lưu>.tar.gz`: Toàn bộ dữ liệu cấu hình đã nén.
+  - `backup_manifest.json`: Chứa metadata, danh sách package đã cài (`pacman`, `yay`, `flatpak`) và danh sách app.
+- Khi khôi phục (`restore`):
+  - Tải file nén `.tar.gz` về máy và **tự động giải nén** về đúng cấu trúc thư mục hệ thống ban đầu (`~/.config/`, `~/.local/share/`, dotfiles).
+  - Tự động kiểm tra file đã tồn tại và hỏi người dùng trước khi ghi đè (hoặc dùng `-f / --force` để ghi đè ngay).
+
+### 2. Ví dụ sử dụng
+
+```bash
+# 1. Sao lưu tất cả (nén toàn bộ ~/.config, ~/.local/share và dotfiles)
+gdrive backup run
+
+# 2. Đặt tên riêng cho bản sao lưu
+gdrive backup run --name "my_setup_2026"
+
+# 3. Chỉ sao lưu các ứng dụng cụ thể (VD: fish, nvim, alacritty)
+gdrive backup run fish nvim alacritty
+
+# 4. Tự động kiểm tra và cài đặt ứng dụng còn thiếu (qua yay / pacman / flatpak)
+gdrive backup run fish --install-missing
+
+# 5. Xem trước danh sách file sẽ sao lưu (không tải lên)
+gdrive backup run --dry-run
+
+# 6. Xem danh sách các bản snapshot đã lưu trên Drive
+gdrive backup list
+
+# 7. Khôi phục về đúng vị trí ban đầu (tự động hỏi xác nhận nếu file đã có sẵn)
+gdrive backup restore my_setup_2026
+
+# 8. Khôi phục và tự động ghi đè mọi file cấu hình cũ không cần hỏi
+gdrive backup restore my_setup_2026 -f
+
+# 9. Khôi phục và tự động cài đặt tất cả ứng dụng trong bản sao lưu
+gdrive backup restore my_setup_2026 --install-apps
+
+# 10. Khôi phục thử nghiệm ra thư mục khác (không chạm vào hệ thống)
+gdrive backup restore my_setup_2026 --dest /tmp/test_restore
+
+# 11. Xóa bản sao lưu trên Drive
+gdrive backup rm my_setup_2026 -y --permanent
+```
 
 ---
 

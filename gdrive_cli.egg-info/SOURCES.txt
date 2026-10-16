@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 gdrive_cli/__init__.py
 gdrive_cli/auth.py
+gdrive_cli/backup.py
 gdrive_cli/cli.py
 gdrive_cli/client.py
 gdrive_cli/config.py
@@ -12,6 +13,8 @@ gdrive_cli.egg-info/dependency_links.txt
 gdrive_cli.egg-info/entry_points.txt
 gdrive_cli.egg-info/requires.txt
 gdrive_cli.egg-info/top_level.txt
+tests/test_backup.py
 tests/test_cli.py
 tests/test_config.py
+tests/test_parallel.py
 tests/test_ui.py

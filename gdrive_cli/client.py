@@ -1,8 +1,10 @@
 import io
 import os
+import threading
+import concurrent.futures
 import mimetypes
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Generator
+from typing import Optional, Dict, Any, List, Generator, Tuple
 
 import click
 from googleapiclient.discovery import build
@@ -41,12 +43,22 @@ EXPORT_MAPPING = {
 
 class DriveClient:
     def __init__(self):
-        creds = auth.get_credentials()
-        if not creds:
+        self._creds = auth.get_credentials()
+        if not self._creds:
             raise PermissionError(
                 "Chưa cấu hình xác thực Google Drive! Vui lòng chạy lệnh:\n  gdrive auth setup"
             )
-        self.service = build("drive", "v3", credentials=creds)
+        self._thread_local = threading.local()
+
+    @property
+    def service(self):
+        if not hasattr(self._thread_local, "service") or self._thread_local.service is None:
+            self._thread_local.service = build("drive", "v3", credentials=self._creds, cache_discovery=False)
+        return self._thread_local.service
+
+    @service.setter
+    def service(self, value):
+        self._thread_local.service = value
 
     def get_about(self) -> Dict[str, Any]:
         """Get account and storage quota info."""
@@ -202,6 +214,45 @@ class DriveClient:
             .execute()
         )
 
+    def find_folder(self, name: str, parent_id: str = "root") -> Optional[Dict[str, Any]]:
+        """Tìm thư mục con theo tên chính xác trong một thư mục cha."""
+        safe_name = name.replace("'", "\\'")
+        q = f"name = '{safe_name}' and '{parent_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        res = self.service.files().list(q=q, pageSize=1, fields="files(id, name)").execute()
+        files = res.get("files", [])
+        return files[0] if files else None
+
+    def ensure_drive_path(self, path_components: List[str], root_parent_id: str = "root") -> str:
+        """
+        Đảm bảo cấu trúc thư mục phân cấp lồng nhau tồn tại trên Google Drive.
+        Trả về ID của thư mục lá cuối cùng.
+        Có bộ nhớ cache bộ nhớ tạm để tránh gọi API nhiều lần.
+        """
+        if not hasattr(self, "_folder_path_cache"):
+            self._folder_path_cache = {}
+
+        current_id = root_parent_id
+        current_path_acc = []
+
+        for comp in path_components:
+            current_path_acc.append(comp)
+            cache_key = (current_id, tuple(current_path_acc))
+            if cache_key in self._folder_path_cache:
+                current_id = self._folder_path_cache[cache_key]
+                continue
+
+            existing = self.find_folder(comp, parent_id=current_id)
+            if existing:
+                folder_id = existing["id"]
+            else:
+                created = self.create_folder(comp, parent_id=current_id)
+                folder_id = created["id"]
+
+            self._folder_path_cache[cache_key] = folder_id
+            current_id = folder_id
+
+        return current_id
+
     def upload_file(
         self,
         local_path: str,
@@ -252,9 +303,12 @@ class DriveClient:
         local_dir_path: str,
         parent_id: Optional[str] = None,
         on_item_upload=None,
+        on_progress=None,
+        workers: int = 4,
     ) -> Dict[str, Any]:
         """
         Recursively upload a folder and its contents.
+        Supports parallel upload with multiple workers.
         Returns the created root folder metadata.
         """
         root_dir = Path(local_dir_path).expanduser().resolve()
@@ -266,26 +320,47 @@ class DriveClient:
 
         IGNORE_DIRS = {"venv", ".venv", "__pycache__", ".git", ".pytest_cache", "node_modules"}
 
+        files_to_upload: List[Tuple[Path, str]] = []
+
         for current_path, subdirs, files in os.walk(root_dir):
             # Bỏ qua các thư mục rác, môi trường ảo
             subdirs[:] = [d for d in subdirs if d not in IGNORE_DIRS and not d.endswith(".egg-info")]
-            files = [f for f in files if not f.endswith((".pyc", ".pyo")) and f != ".DS_Store"]
+            valid_files = [f for f in files if not f.endswith((".pyc", ".pyo")) and f != ".DS_Store"]
 
             current_p = Path(current_path)
             current_remote_id = folder_map[current_p]
 
-            # Create subdirectories in Drive
+            # Tạo cây thư mục con trên Drive
             for subdir_name in subdirs:
                 sub_p = current_p / subdir_name
                 sub_meta = self.create_folder(subdir_name, parent_id=current_remote_id)
                 folder_map[sub_p] = sub_meta["id"]
 
-            # Upload files
-            for file_name in files:
+            for file_name in valid_files:
                 file_p = current_p / file_name
-                if on_item_upload:
-                    on_item_upload(file_p)
-                self.upload_file(str(file_p), parent_id=current_remote_id)
+                files_to_upload.append((file_p, current_remote_id))
+
+        if not files_to_upload:
+            return root_folder_meta
+
+        def _upload_worker(item):
+            file_p, target_folder_id = item
+            if on_item_upload:
+                on_item_upload(file_p)
+            res = self.upload_file(str(file_p), parent_id=target_folder_id)
+            if on_progress:
+                on_progress(file_p)
+            return res
+
+        num_workers = max(1, min(workers, len(files_to_upload)))
+        if num_workers <= 1:
+            for it in files_to_upload:
+                _upload_worker(it)
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+                futures = [executor.submit(_upload_worker, it) for it in files_to_upload]
+                for f in concurrent.futures.as_completed(futures):
+                    f.result()
 
         return root_folder_meta
 
@@ -355,9 +430,12 @@ class DriveClient:
         folder_id: str,
         output_dir_or_path: Optional[str] = None,
         on_item_download=None,
+        on_progress=None,
+        workers: int = 4,
     ) -> Path:
         """
         Tải đệ quy toàn bộ thư mục và các file bên trong về máy.
+        Hỗ trợ tải song song đa luồng (workers).
         """
         meta = self.get_file_metadata(folder_id, fields="id, name")
         folder_name = meta.get("name", folder_id)
@@ -366,18 +444,46 @@ class DriveClient:
         target_dir = base_dir / folder_name
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        items = self.list_files(parent_id=folder_id, page_size=500)
-        for item in items:
-            item_id = item["id"]
-            item_name = item.get("name", "Unnamed")
-            item_mime = item.get("mimeType", "")
+        # Duyệt cây thư mục từ Drive
+        folders_to_visit = [(folder_id, target_dir)]
+        files_to_download: List[Tuple[str, str, Path]] = []  # (item_id, item_name, dest_dir)
 
-            if item_mime == "application/vnd.google-apps.folder":
-                self.download_folder(item_id, output_dir_or_path=str(target_dir), on_item_download=on_item_download)
-            else:
-                if on_item_download:
-                    on_item_download(item_name)
-                self.download_file(item_id, output_dir_or_path=str(target_dir))
+        while folders_to_visit:
+            curr_id, curr_local_dir = folders_to_visit.pop(0)
+            items = self.list_files(parent_id=curr_id, page_size=500)
+            for item in items:
+                item_id = item["id"]
+                item_name = item.get("name", "Unnamed")
+                item_mime = item.get("mimeType", "")
+
+                if item_mime == "application/vnd.google-apps.folder":
+                    sub_local_dir = curr_local_dir / item_name
+                    sub_local_dir.mkdir(parents=True, exist_ok=True)
+                    folders_to_visit.append((item_id, sub_local_dir))
+                else:
+                    files_to_download.append((item_id, item_name, curr_local_dir))
+
+        if not files_to_download:
+            return target_dir
+
+        def _dl_worker(it):
+            item_id, item_name, dest_dir = it
+            if on_item_download:
+                on_item_download(item_name)
+            res = self.download_file(item_id, output_dir_or_path=str(dest_dir))
+            if on_progress:
+                on_progress(item_name)
+            return res
+
+        num_workers = max(1, min(workers, len(files_to_download)))
+        if num_workers <= 1:
+            for it in files_to_download:
+                _dl_worker(it)
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+                futures = [executor.submit(_dl_worker, it) for it in files_to_download]
+                for f in concurrent.futures.as_completed(futures):
+                    f.result()
 
         return target_dir
 
